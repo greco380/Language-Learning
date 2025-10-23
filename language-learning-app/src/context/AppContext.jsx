@@ -94,8 +94,11 @@ export const AppProvider = ({ children }) => {
       const savedWord = storageService.saveWord(wordObj);
       setWords(prev => [savedWord, ...prev]);
 
-      // Invalidate curriculum to trigger regeneration
-      setCurriculum(null);
+      // Trigger curriculum update to add courses for new word
+      // Don't invalidate - just trigger regeneration which will append new courses
+      setTimeout(() => {
+        generateCurriculum(false);
+      }, 100);
 
       return savedWord;
     } catch (error) {
@@ -112,8 +115,8 @@ export const AppProvider = ({ children }) => {
     try {
       const updatedWord = storageService.updateWord(wordId, updates);
       setWords(prev => prev.map(w => w.id === wordId ? updatedWord : w));
-      // Invalidate curriculum to trigger regeneration
-      setCurriculum(null);
+      // Don't invalidate curriculum - word updates don't require curriculum changes
+      // The word object in the course will be updated through the reference
       return updatedWord;
     } catch (error) {
       console.error('Error updating word:', error);
@@ -130,8 +133,8 @@ export const AppProvider = ({ children }) => {
       const success = storageService.deleteWord(wordId);
       if (success) {
         setWords(prev => prev.filter(w => w.id !== wordId));
-        // Invalidate curriculum
-        setCurriculum(null);
+        // Don't invalidate curriculum - keep existing courses even if word is deleted
+        // The courses will simply have fewer words, but the curriculum structure remains
       }
       return success;
     } catch (error) {
@@ -153,37 +156,84 @@ export const AppProvider = ({ children }) => {
    * Generate curriculum from recorded words
    */
   const generateCurriculum = async (forceRegenerate = false) => {
-    if (curriculum && !forceRegenerate) {
-      return curriculum;
-    }
-
     if (words.length === 0) {
+      // If no words but curriculum exists, keep existing curriculum
+      if (curriculum && curriculum.length > 0) {
+        return curriculum;
+      }
       const defaultCurriculum = openaiService.getDefaultCurriculum();
       setCurriculum(defaultCurriculum);
       storageService.saveCurriculum(defaultCurriculum);
       return defaultCurriculum;
     }
 
+    // If forceRegenerate is true, regenerate everything
+    if (forceRegenerate) {
+      setIsLoading(true);
+      setError(null);
+
+      try {
+        // Try AI-powered curriculum generation
+        const aiCurriculum = await openaiService.generateCurriculum(words);
+        setCurriculum(aiCurriculum);
+        storageService.saveCurriculum(aiCurriculum);
+        setIsLoading(false);
+        return aiCurriculum;
+      } catch (error) {
+        console.error('AI curriculum generation failed, using fallback:', error);
+
+        // Fallback: use local curriculum generator
+        const groupedWords = groupWordsByTheme(words);
+        const localCurriculum = createCourses(groupedWords);
+        setCurriculum(localCurriculum);
+        storageService.saveCurriculum(localCurriculum);
+        setIsLoading(false);
+        return localCurriculum;
+      }
+    }
+
+    // Find words that are not yet in any course
+    const existingCourses = curriculum || [];
+    const wordsInCourses = new Set();
+
+    existingCourses.forEach(course => {
+      if (course.wordObjects) {
+        course.wordObjects.forEach(wordObj => {
+          // Add a unique identifier for each word
+          if (wordObj.id) {
+            wordsInCourses.add(wordObj.id);
+          }
+        });
+      }
+    });
+
+    // Filter out words that are already in courses
+    const newWords = words.filter(word => !wordsInCourses.has(word.id));
+
+    // If no new words, return existing curriculum
+    if (newWords.length === 0) {
+      return curriculum;
+    }
+
     setIsLoading(true);
     setError(null);
 
     try {
-      // Try AI-powered curriculum generation
-      const aiCurriculum = await openaiService.generateCurriculum(words);
-      setCurriculum(aiCurriculum);
-      storageService.saveCurriculum(aiCurriculum);
-      setIsLoading(false);
-      return aiCurriculum;
-    } catch (error) {
-      console.error('AI curriculum generation failed, using fallback:', error);
+      // Generate courses only for new words
+      const groupedWords = groupWordsByTheme(newWords);
+      const newCourses = createCourses(groupedWords);
 
-      // Fallback: use local curriculum generator
-      const groupedWords = groupWordsByTheme(words);
-      const localCurriculum = createCourses(groupedWords);
-      setCurriculum(localCurriculum);
-      storageService.saveCurriculum(localCurriculum);
+      // Append new courses to existing curriculum
+      const updatedCurriculum = [...existingCourses, ...newCourses];
+      setCurriculum(updatedCurriculum);
+      storageService.saveCurriculum(updatedCurriculum);
       setIsLoading(false);
-      return localCurriculum;
+      return updatedCurriculum;
+    } catch (error) {
+      console.error('Error generating curriculum for new words:', error);
+      setIsLoading(false);
+      // Return existing curriculum if there's an error
+      return existingCourses;
     }
   };
 

@@ -226,13 +226,29 @@ class OpenAIService {
    */
   async generatePracticeQuestions(course, count = 5) {
     try {
+      // Handle backward compatibility: if wordObjects doesn't exist, build it from words
+      let wordObjects = course.wordObjects;
+      if (!wordObjects || wordObjects.length === 0) {
+        // Backward compatibility: create simple word objects from words array
+        wordObjects = (course.words || []).map(word => ({
+          word: word,
+          language: 'target language',
+          // These are legacy format objects
+        }));
+      }
+
+      // If still no words, return empty
+      if (wordObjects.length === 0) {
+        return [];
+      }
+
       // Build word pairs information for the prompt
-      const wordPairs = course.wordObjects.map(w => {
+      const wordPairs = wordObjects.map(w => {
         if (w.foreignWord && w.nativeWord) {
           return `${w.nativeWord.text} (${w.nativeWord.language}) = ${w.foreignWord.text} (${w.foreignWord.language})`;
         } else {
           // Legacy format
-          return `${w.word} (${w.language})`;
+          return `${w.word} (${w.language || 'target language'})`;
         }
       }).join(', ');
 
@@ -279,10 +295,11 @@ class OpenAIService {
         const questions = JSON.parse(jsonMatch[0]);
         // Attach word objects to questions for audio access
         return questions.map(q => {
-          const wordObj = course.wordObjects.find((w, idx) =>
+          const wordObj = wordObjects.find((w, idx) =>
             q.wordId === idx ||
-            (w.foreignWord && (w.foreignWord.text === q.correctAnswer || w.nativeWord.text === q.correctAnswer))
-          ) || course.wordObjects[0];
+            (w.foreignWord && (w.foreignWord.text === q.correctAnswer || w.nativeWord.text === q.correctAnswer)) ||
+            (w.word && w.word === q.correctAnswer)
+          ) || wordObjects[0];
 
           return {
             ...q,
@@ -292,10 +309,15 @@ class OpenAIService {
       }
 
       // Fallback: generate simple translation questions
-      return this.generateFallbackQuestions(course.wordObjects, count);
+      return this.generateFallbackQuestions(wordObjects, count);
     } catch (error) {
       console.error('Error generating questions:', error);
-      return this.generateFallbackQuestions(course.wordObjects, count);
+      // Handle backward compatibility in fallback too
+      const wordObjects = course.wordObjects || (course.words || []).map(word => ({
+        word: word,
+        language: 'target language',
+      }));
+      return this.generateFallbackQuestions(wordObjects, count);
     }
   }
 
