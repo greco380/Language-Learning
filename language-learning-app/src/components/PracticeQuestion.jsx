@@ -134,27 +134,27 @@ const PracticeQuestion = ({ question, onAnswer, onNext, questionNumber, totalQue
 
         {/* Question */}
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">
             {question.question}
           </h2>
 
           {/* Audio Hint Button */}
           {hasAudioHint() && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
               <button
                 type="button"
                 onClick={playAudioHint}
                 disabled={isPlayingAudio}
-                className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-blue-400"
                 title="Play audio hint"
               >
-                <Volume2 size={18} className={isPlayingAudio ? 'animate-pulse' : ''} />
-                <span className="text-sm font-medium">
-                  {isPlayingAudio ? 'Playing...' : 'Play Audio Hint'}
+                <Volume2 size={20} className={isPlayingAudio ? 'animate-pulse' : ''} />
+                <span>
+                  {isPlayingAudio ? 'Playing...' : 'Listen to Pronunciation'}
                 </span>
               </button>
-              <span className="text-xs text-gray-500">
-                Listen to the pronunciation
+              <span className="text-sm text-blue-700">
+                Tap to hear how it sounds
               </span>
             </div>
           )}
@@ -198,12 +198,12 @@ const PracticeQuestion = ({ question, onAnswer, onNext, questionNumber, totalQue
                 onChange={(e) => setUserAnswer(e.target.value)}
                 disabled={isSubmitted}
                 placeholder="Type your answer..."
-                className={`input-field text-lg ${
+                className={`w-full px-4 py-3 text-lg rounded-lg focus:outline-none transition-all duration-200 ${
                   isSubmitted
                     ? feedback?.isCorrect
-                      ? 'border-green-500 bg-green-50'
-                      : 'border-red-500 bg-red-50'
-                    : ''
+                      ? 'border-2 border-green-500 bg-green-50 text-green-900 ring-2 ring-green-200'
+                      : 'border-2 border-red-500 bg-red-50 text-red-900 ring-2 ring-red-200'
+                    : 'border-2 border-gray-300 focus:ring-2 focus:ring-primary-500 focus:border-primary-500'
                 }`}
                 autoFocus
               />
