@@ -1,11 +1,50 @@
 import React, { useState } from 'react';
-import { Check, X, ArrowRight } from 'lucide-react';
+import { Check, X, ArrowRight, Volume2 } from 'lucide-react';
 
 const PracticeQuestion = ({ question, onAnswer, onNext, questionNumber, totalQuestions }) => {
   const [userAnswer, setUserAnswer] = useState('');
   const [selectedOption, setSelectedOption] = useState(null);
   const [feedback, setFeedback] = useState(null);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
+
+  // Play audio hint
+  const playAudioHint = () => {
+    if (!question.wordObject) return;
+
+    const wordObj = question.wordObject;
+    let audioToPlay = null;
+
+    // Determine which audio to play based on question direction
+    if (question.direction === 'native_to_foreign' && wordObj.foreignWord?.audio) {
+      // Question shows native word, answer in foreign → play foreign audio as hint
+      audioToPlay = wordObj.foreignWord.audio;
+    } else if (question.direction === 'foreign_to_native' && wordObj.foreignWord?.audio) {
+      // Question shows foreign word, answer in native → play foreign audio for pronunciation
+      audioToPlay = wordObj.foreignWord.audio;
+    } else if (wordObj.audio) {
+      // Legacy format
+      audioToPlay = wordObj.audio;
+    }
+
+    if (audioToPlay) {
+      setIsPlayingAudio(true);
+      const audio = new Audio(audioToPlay);
+      audio.onended = () => setIsPlayingAudio(false);
+      audio.onerror = () => setIsPlayingAudio(false);
+      audio.play().catch(err => {
+        console.error('Error playing audio:', err);
+        setIsPlayingAudio(false);
+      });
+    }
+  };
+
+  // Check if audio hint is available
+  const hasAudioHint = () => {
+    if (!question.wordObject) return false;
+    const wordObj = question.wordObject;
+    return !!(wordObj.foreignWord?.audio || wordObj.audio);
+  };
 
   const handleSubmit = (e) => {
     e.preventDefault();
@@ -94,9 +133,32 @@ const PracticeQuestion = ({ question, onAnswer, onNext, questionNumber, totalQue
         </div>
 
         {/* Question */}
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">
-          {question.question}
-        </h2>
+        <div className="mb-6">
+          <h2 className="text-2xl font-bold text-gray-900 mb-3">
+            {question.question}
+          </h2>
+
+          {/* Audio Hint Button */}
+          {hasAudioHint() && (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={playAudioHint}
+                disabled={isPlayingAudio}
+                className="flex items-center gap-2 px-4 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Play audio hint"
+              >
+                <Volume2 size={18} className={isPlayingAudio ? 'animate-pulse' : ''} />
+                <span className="text-sm font-medium">
+                  {isPlayingAudio ? 'Playing...' : 'Play Audio Hint'}
+                </span>
+              </button>
+              <span className="text-xs text-gray-500">
+                Listen to the pronunciation
+              </span>
+            </div>
+          )}
+        </div>
 
         {/* Answer Input */}
         <form onSubmit={handleSubmit}>
