@@ -133,7 +133,13 @@ class OpenAIService {
     }
 
     try {
-      const wordList = words.map(w => `${w.word} (${w.language})`).join(', ');
+      // Build word list handling both formats
+      const wordList = words.map(w => {
+        if (w.foreignWord && w.nativeWord) {
+          return `${w.nativeWord.text} (${w.nativeWord.language}) = ${w.foreignWord.text} (${w.foreignWord.language})`;
+        }
+        return `${w.word} (${w.language})`;
+      }).join(', ');
 
       const messages = [
         {
@@ -145,7 +151,7 @@ class OpenAIService {
           - description: brief description
           - category: theme (e.g., "Basics", "Food", "Travel")
           - difficulty: "beginner", "intermediate", or "advanced"
-          - words: array of words in this course
+          - words: array of words in this course (use the native language words)
 
           Group similar words together into logical courses of 5-10 words each.`
         },
@@ -161,11 +167,25 @@ class OpenAIService {
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const curriculum = JSON.parse(jsonMatch[0]);
-        return curriculum.map((course, index) => ({
-          ...course,
-          id: course.id || `course-${index}`,
-          wordCount: course.words?.length || 0,
-        }));
+        return curriculum.map((course, index) => {
+          // Map the word strings back to word objects
+          const wordObjects = course.words.map(wordStr => {
+            return words.find(w => {
+              if (w.foreignWord && w.nativeWord) {
+                return w.nativeWord.text.toLowerCase() === wordStr.toLowerCase() ||
+                       w.foreignWord.text.toLowerCase() === wordStr.toLowerCase();
+              }
+              return w.word.toLowerCase() === wordStr.toLowerCase();
+            });
+          }).filter(Boolean);
+
+          return {
+            ...course,
+            id: course.id || `course-${index}`,
+            wordCount: course.words?.length || 0,
+            wordObjects: wordObjects,
+          };
+        });
       }
 
       return this.getDefaultCurriculum();
@@ -206,22 +226,49 @@ class OpenAIService {
    */
   async generatePracticeQuestions(course, count = 5) {
     try {
+      // Build word pairs information for the prompt
+      const wordPairs = course.wordObjects.map(w => {
+        if (w.foreignWord && w.nativeWord) {
+          return `${w.nativeWord.text} (${w.nativeWord.language}) = ${w.foreignWord.text} (${w.foreignWord.language})`;
+        } else {
+          // Legacy format
+          return `${w.word} (${w.language})`;
+        }
+      }).join(', ');
+
       const messages = [
         {
           role: 'system',
-          content: `You are a language learning quiz generator. Create practice questions for the given words.
+          content: `You are a language learning quiz generator. Create practice questions that alternate between two directions:
+
+          1. Native to Foreign: Show the native language word and ask for the foreign language translation
+             Example: "What is the Spanish word for 'hello'? Answer in Spanish:"
+
+          2. Foreign to Native: Show the foreign language word and ask for the native language translation
+             Example: "What does 'Hola' mean? Answer in English:"
+
+          IMPORTANT:
+          - The question must clearly state which language the answer should be in
+          - Alternate between both directions
+          - Do NOT show the answer in the question text
+          - For Native→Foreign questions, show the native word and ask for foreign
+          - For Foreign→Native questions, show the foreign word and ask for native
+
           Return a JSON array of questions. Each question should have:
           - id: unique identifier
           - type: "translation", "multiple_choice", or "fill_blank"
-          - question: the question text
+          - question: the question text (must clearly indicate answer language)
           - correctAnswer: the correct answer
           - options: array of 4 options (for multiple choice)
-          - word: the word being tested`
+          - wordId: the ID or index of the word being tested
+          - direction: "native_to_foreign" or "foreign_to_native"
+          - answerLanguage: the language expected for the answer`
         },
         {
           role: 'user',
-          content: `Create ${count} practice questions for these words: ${course.words.join(', ')}.
-          Course: ${course.title}. Difficulty: ${course.difficulty}.`
+          content: `Create ${count} practice questions for these word pairs: ${wordPairs}.
+          Course: ${course.title}. Difficulty: ${course.difficulty}.
+          Make sure to alternate between asking for the foreign language translation and the native language translation.`
         }
       ];
 
@@ -229,29 +276,73 @@ class OpenAIService {
 
       const jsonMatch = response.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
+        const questions = JSON.parse(jsonMatch[0]);
+        // Attach word objects to questions for audio access
+        return questions.map(q => {
+          const wordObj = course.wordObjects.find((w, idx) =>
+            q.wordId === idx ||
+            (w.foreignWord && (w.foreignWord.text === q.correctAnswer || w.nativeWord.text === q.correctAnswer))
+          ) || course.wordObjects[0];
+
+          return {
+            ...q,
+            wordObject: wordObj
+          };
+        });
       }
 
       // Fallback: generate simple translation questions
-      return this.generateFallbackQuestions(course.words, count);
+      return this.generateFallbackQuestions(course.wordObjects, count);
     } catch (error) {
       console.error('Error generating questions:', error);
-      return this.generateFallbackQuestions(course.words, count);
+      return this.generateFallbackQuestions(course.wordObjects, count);
     }
   }
 
   /**
    * Fallback question generation
    */
-  generateFallbackQuestions(words, count) {
-    const selectedWords = words.slice(0, count);
-    return selectedWords.map((word, index) => ({
-      id: `q-${index}`,
-      type: 'translation',
-      question: `How do you say "${word}" in the target language?`,
-      correctAnswer: word,
-      word: word,
-    }));
+  generateFallbackQuestions(wordObjects, count) {
+    const selectedWords = wordObjects.slice(0, count);
+    return selectedWords.map((wordObj, index) => {
+      // Determine direction (alternate between native→foreign and foreign→native)
+      const isNativeToForeign = index % 2 === 0;
+
+      let question, correctAnswer, answerLanguage, direction;
+
+      if (wordObj.foreignWord && wordObj.nativeWord) {
+        // New format: use bidirectional questions
+        if (isNativeToForeign) {
+          // Native → Foreign
+          question = `What is the ${wordObj.foreignWord.language} word for "${wordObj.nativeWord.text}"? Answer in ${wordObj.foreignWord.language}:`;
+          correctAnswer = wordObj.foreignWord.text;
+          answerLanguage = wordObj.foreignWord.language;
+          direction = 'native_to_foreign';
+        } else {
+          // Foreign → Native
+          question = `What does "${wordObj.foreignWord.text}" mean? Answer in ${wordObj.nativeWord.language}:`;
+          correctAnswer = wordObj.nativeWord.text;
+          answerLanguage = wordObj.nativeWord.language;
+          direction = 'foreign_to_native';
+        }
+      } else {
+        // Legacy format: simple translation question
+        question = `How do you say "${wordObj.word}" in ${wordObj.language}?`;
+        correctAnswer = wordObj.word;
+        answerLanguage = wordObj.language;
+        direction = 'native_to_foreign';
+      }
+
+      return {
+        id: `q-${index}`,
+        type: 'translation',
+        question: question,
+        correctAnswer: correctAnswer,
+        answerLanguage: answerLanguage,
+        direction: direction,
+        wordObject: wordObj
+      };
+    });
   }
 
   /**

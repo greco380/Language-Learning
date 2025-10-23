@@ -42,7 +42,16 @@ export const groupWordsByTheme = (words) => {
   };
 
   words.forEach(wordObj => {
-    const word = wordObj.word.toLowerCase();
+    // Handle both new format (foreignWord/nativeWord) and legacy format (word)
+    let word;
+    if (wordObj.foreignWord && wordObj.nativeWord) {
+      // New format: use native word for categorization
+      word = wordObj.nativeWord.text.toLowerCase();
+    } else {
+      // Legacy format
+      word = wordObj.word.toLowerCase();
+    }
+
     let categorized = false;
 
     // Try to match with theme keywords
@@ -106,7 +115,13 @@ export const createCourses = (groupedWords) => {
       description: info.description,
       category: info.category,
       difficulty: assignDifficulty(words.length, theme),
-      words: words.map(w => w.word),
+      words: words.map(w => {
+        // Handle both new format and legacy format
+        if (w.foreignWord && w.nativeWord) {
+          return w.nativeWord.text; // Use native word for display
+        }
+        return w.word;
+      }),
       wordObjects: words,
       wordCount: words.length,
       progress: 0,
