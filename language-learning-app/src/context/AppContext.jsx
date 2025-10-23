@@ -106,6 +106,23 @@ export const AppProvider = ({ children }) => {
   };
 
   /**
+   * Update a word
+   */
+  const updateWord = (wordId, updates) => {
+    try {
+      const updatedWord = storageService.updateWord(wordId, updates);
+      setWords(prev => prev.map(w => w.id === wordId ? updatedWord : w));
+      // Invalidate curriculum to trigger regeneration
+      setCurriculum(null);
+      return updatedWord;
+    } catch (error) {
+      console.error('Error updating word:', error);
+      setError('Failed to update word');
+      throw error;
+    }
+  };
+
+  /**
    * Delete a word
    */
   const deleteWord = (wordId) => {
@@ -277,6 +294,7 @@ export const AppProvider = ({ children }) => {
 
     // Actions
     addWord,
+    updateWord,
     deleteWord,
     changeLanguage,
     generateCurriculum,

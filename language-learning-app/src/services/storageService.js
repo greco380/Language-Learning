@@ -37,6 +37,31 @@ class StorageService {
     }
   }
 
+  updateWord(wordId, updates) {
+    try {
+      const words = this.getWords();
+      const wordIndex = words.findIndex(word => word.id === wordId);
+
+      if (wordIndex === -1) {
+        throw new Error('Word not found');
+      }
+
+      // Update the word while preserving the original structure
+      words[wordIndex] = {
+        ...words[wordIndex],
+        ...updates,
+        id: wordId, // Ensure ID doesn't change
+        timestamp: words[wordIndex].timestamp, // Preserve original timestamp
+      };
+
+      localStorage.setItem(STORAGE_KEYS.WORDS, JSON.stringify(words));
+      return words[wordIndex];
+    } catch (error) {
+      console.error('Error updating word:', error);
+      throw new Error('Failed to update word');
+    }
+  }
+
   deleteWord(wordId) {
     try {
       const words = this.getWords();

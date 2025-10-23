@@ -26,7 +26,13 @@ const DualRecordingInterface = ({ onRecordComplete }) => {
 
   // Handle foreign word recording
   const handleForeignRecord = async () => {
-    if (foreignRecording) return;
+    if (foreignRecording) {
+      // If already recording, stop it
+      if (window.currentForeignRecognition) {
+        window.currentForeignRecognition.stop();
+      }
+      return;
+    }
 
     setForeignError(null);
     setForeignWord('');
@@ -36,48 +42,96 @@ const DualRecordingInterface = ({ onRecordComplete }) => {
       const languageCode = speechService.getLanguageCode(foreignLanguage);
       const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
       recognition.lang = languageCode;
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
+      recognition.interimResults = true; // Show interim results for better feedback
+      recognition.maxAlternatives = 3; // Get more alternatives
+      recognition.continuous = false;
+
+      // Store recognition instance for manual stop
+      window.currentForeignRecognition = recognition;
+
+      let finalTranscript = '';
+      let interimTranscript = '';
 
       recognition.onstart = () => {
         console.log('Foreign word recording started');
       };
 
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setForeignWord(transcript);
-        console.log('Foreign word:', transcript);
+        let interim = '';
+        let final = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            final += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        if (final) {
+          finalTranscript = final;
+          setForeignWord(final);
+          console.log('Foreign word (final):', final);
+        } else if (interim) {
+          interimTranscript = interim;
+          setForeignWord(interim + '...');
+          console.log('Foreign word (interim):', interim);
+        }
       };
 
       recognition.onerror = (event) => {
         console.error('Foreign recording error:', event.error);
-        setForeignError(`Recording failed: ${event.error}`);
+        if (event.error === 'no-speech') {
+          setForeignError('No speech detected. Please speak louder and closer to the microphone.');
+        } else if (event.error === 'audio-capture') {
+          setForeignError('Microphone not detected. Please check your microphone.');
+        } else if (event.error === 'not-allowed') {
+          setForeignError('Microphone permission denied. Please allow microphone access.');
+        } else {
+          setForeignError(`Recording failed: ${event.error}`);
+        }
         setForeignRecording(false);
+        window.currentForeignRecognition = null;
       };
 
       recognition.onend = () => {
         setForeignRecording(false);
+        window.currentForeignRecognition = null;
+        // Use the final transcript if we have it, otherwise use interim
+        if (finalTranscript) {
+          setForeignWord(finalTranscript);
+        } else if (interimTranscript) {
+          setForeignWord(interimTranscript);
+        }
       };
 
       recognition.start();
 
-      // Auto-stop after 5 seconds
+      // Auto-stop after 10 seconds (increased from 5)
       setTimeout(() => {
-        if (recognition) {
+        if (recognition && foreignRecording) {
           recognition.stop();
         }
-      }, 5000);
+      }, 10000);
 
     } catch (err) {
       console.error('Error starting foreign recording:', err);
       setForeignError(err.message);
       setForeignRecording(false);
+      window.currentForeignRecognition = null;
     }
   };
 
   // Handle native word recording
   const handleNativeRecord = async () => {
-    if (nativeRecording) return;
+    if (nativeRecording) {
+      // If already recording, stop it
+      if (window.currentNativeRecognition) {
+        window.currentNativeRecognition.stop();
+      }
+      return;
+    }
 
     setNativeError(null);
     setNativeWord('');
@@ -86,42 +140,84 @@ const DualRecordingInterface = ({ onRecordComplete }) => {
     try {
       const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
       recognition.lang = 'en-US';
-      recognition.interimResults = false;
-      recognition.maxAlternatives = 1;
+      recognition.interimResults = true; // Show interim results for better feedback
+      recognition.maxAlternatives = 3; // Get more alternatives
+      recognition.continuous = false;
+
+      // Store recognition instance for manual stop
+      window.currentNativeRecognition = recognition;
+
+      let finalTranscript = '';
+      let interimTranscript = '';
 
       recognition.onstart = () => {
         console.log('Native word recording started');
       };
 
       recognition.onresult = (event) => {
-        const transcript = event.results[0][0].transcript;
-        setNativeWord(transcript);
-        console.log('Native word:', transcript);
+        let interim = '';
+        let final = '';
+
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            final += transcript;
+          } else {
+            interim += transcript;
+          }
+        }
+
+        if (final) {
+          finalTranscript = final;
+          setNativeWord(final);
+          console.log('Native word (final):', final);
+        } else if (interim) {
+          interimTranscript = interim;
+          setNativeWord(interim + '...');
+          console.log('Native word (interim):', interim);
+        }
       };
 
       recognition.onerror = (event) => {
         console.error('Native recording error:', event.error);
-        setNativeError(`Recording failed: ${event.error}`);
+        if (event.error === 'no-speech') {
+          setNativeError('No speech detected. Please speak louder and closer to the microphone.');
+        } else if (event.error === 'audio-capture') {
+          setNativeError('Microphone not detected. Please check your microphone.');
+        } else if (event.error === 'not-allowed') {
+          setNativeError('Microphone permission denied. Please allow microphone access.');
+        } else {
+          setNativeError(`Recording failed: ${event.error}`);
+        }
         setNativeRecording(false);
+        window.currentNativeRecognition = null;
       };
 
       recognition.onend = () => {
         setNativeRecording(false);
+        window.currentNativeRecognition = null;
+        // Use the final transcript if we have it, otherwise use interim
+        if (finalTranscript) {
+          setNativeWord(finalTranscript);
+        } else if (interimTranscript) {
+          setNativeWord(interimTranscript);
+        }
       };
 
       recognition.start();
 
-      // Auto-stop after 5 seconds
+      // Auto-stop after 10 seconds (increased from 5)
       setTimeout(() => {
-        if (recognition) {
+        if (recognition && nativeRecording) {
           recognition.stop();
         }
-      }, 5000);
+      }, 10000);
 
     } catch (err) {
       console.error('Error starting native recording:', err);
       setNativeError(err.message);
       setNativeRecording(false);
+      window.currentNativeRecognition = null;
     }
   };
 
@@ -248,24 +344,35 @@ const DualRecordingInterface = ({ onRecordComplete }) => {
             )}
           </button>
 
-          <div className="text-center min-h-[60px]">
+          <div className="text-center min-h-[80px]">
             {foreignRecording && (
-              <p className="text-red-600 font-semibold animate-pulse">
-                Listening... Speak the foreign word
-              </p>
+              <div>
+                <p className="text-red-600 font-semibold animate-pulse mb-2">
+                  Listening... Speak the foreign word
+                </p>
+                <p className="text-gray-600 text-sm">
+                  Click button again to stop recording
+                </p>
+              </div>
             )}
             {foreignWord && !foreignRecording && (
               <div>
                 <p className="text-green-600 font-semibold mb-1">Recorded:</p>
-                <p className="text-gray-900 text-lg font-medium">{foreignWord}</p>
+                <p className="text-gray-900 text-lg font-medium">{foreignWord.replace('...', '')}</p>
                 <p className="text-gray-500 text-sm">({foreignLanguage})</p>
               </div>
             )}
             {foreignError && (
-              <p className="text-red-600 text-sm">{foreignError}</p>
+              <div>
+                <p className="text-red-600 text-sm font-semibold mb-1">{foreignError}</p>
+                <p className="text-gray-600 text-xs">Try speaking louder and closer to the mic</p>
+              </div>
             )}
             {!foreignRecording && !foreignWord && !foreignError && (
-              <p className="text-gray-600 text-sm">Tap to record the foreign word</p>
+              <div>
+                <p className="text-gray-600 text-sm mb-1">Tap to record the foreign word</p>
+                <p className="text-gray-500 text-xs">Speak clearly after clicking</p>
+              </div>
             )}
           </div>
         </div>
@@ -307,24 +414,35 @@ const DualRecordingInterface = ({ onRecordComplete }) => {
               )}
             </button>
 
-            <div className="text-center min-h-[60px]">
+            <div className="text-center min-h-[80px]">
               {nativeRecording && (
-                <p className="text-red-600 font-semibold animate-pulse">
-                  Listening... Speak the English word
-                </p>
+                <div>
+                  <p className="text-red-600 font-semibold animate-pulse mb-2">
+                    Listening... Speak the English word
+                  </p>
+                  <p className="text-gray-600 text-sm">
+                    Click button again to stop recording
+                  </p>
+                </div>
               )}
               {nativeWord && !nativeRecording && (
                 <div>
                   <p className="text-green-600 font-semibold mb-1">Recorded:</p>
-                  <p className="text-gray-900 text-lg font-medium">{nativeWord}</p>
+                  <p className="text-gray-900 text-lg font-medium">{nativeWord.replace('...', '')}</p>
                   <p className="text-gray-500 text-sm">(English)</p>
                 </div>
               )}
               {nativeError && (
-                <p className="text-red-600 text-sm">{nativeError}</p>
+                <div>
+                  <p className="text-red-600 text-sm font-semibold mb-1">{nativeError}</p>
+                  <p className="text-gray-600 text-xs">Try speaking louder and closer to the mic</p>
+                </div>
               )}
               {!nativeRecording && !nativeWord && !nativeError && (
-                <p className="text-gray-600 text-sm">Tap to record the English word</p>
+                <div>
+                  <p className="text-gray-600 text-sm mb-1">Tap to record the English word</p>
+                  <p className="text-gray-500 text-xs">Speak clearly after clicking</p>
+                </div>
               )}
             </div>
           </div>
