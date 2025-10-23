@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Clock, Globe, Trash2, Volume2, ArrowRight, Edit2, Check, X } from 'lucide-react';
+import { Clock, Globe, Trash2, Volume2, ArrowRight, Edit2, Check, X, Mic } from 'lucide-react';
 import { useAppContext } from '../context/AppContext';
+import speechService from '../services/speechService';
 
 const WordCard = ({ word, language, context, timestamp, onDelete, wordId, foreignWord, nativeWord }) => {
   const { updateWord } = useAppContext();
@@ -8,6 +9,11 @@ const WordCard = ({ word, language, context, timestamp, onDelete, wordId, foreig
   const [editForeignWord, setEditForeignWord] = useState('');
   const [editNativeWord, setEditNativeWord] = useState('');
   const [editError, setEditError] = useState(null);
+
+  // Audio recording state
+  const [recordingForeign, setRecordingForeign] = useState(false);
+  const [recordingNative, setRecordingNative] = useState(false);
+  const [recordingError, setRecordingError] = useState(null);
   // Support both old and new format
   const isNewFormat = foreignWord && nativeWord;
   const displayWord = isNewFormat ? foreignWord.text : word;
@@ -115,6 +121,113 @@ const WordCard = ({ word, language, context, timestamp, onDelete, wordId, foreig
     }
   };
 
+  const handleRecordForeignAudio = async () => {
+    if (recordingForeign || !isNewFormat) return;
+
+    setRecordingForeign(true);
+    setRecordingError(null);
+
+    try {
+      const languageCode = speechService.getLanguageCode(displayLanguage);
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = languageCode;
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript;
+
+        // Update word with audio indicator (we're not actually storing audio blob, just marking it as recorded)
+        const updates = {
+          foreignWord: {
+            ...foreignWord,
+            audioRecorded: true,
+            audioTranscript: transcript
+          }
+        };
+
+        await updateWord(wordId, updates);
+        setRecordingForeign(false);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Recording error:', event.error);
+        setRecordingError('Failed to record audio');
+        setRecordingForeign(false);
+      };
+
+      recognition.onend = () => {
+        setRecordingForeign(false);
+      };
+
+      recognition.start();
+
+      setTimeout(() => {
+        if (recognition) {
+          recognition.stop();
+        }
+      }, 5000);
+
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      setRecordingError('Failed to start recording');
+      setRecordingForeign(false);
+    }
+  };
+
+  const handleRecordNativeAudio = async () => {
+    if (recordingNative || !isNewFormat) return;
+
+    setRecordingNative(true);
+    setRecordingError(null);
+
+    try {
+      const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+      recognition.lang = 'en-US';
+      recognition.interimResults = false;
+      recognition.maxAlternatives = 1;
+
+      recognition.onresult = async (event) => {
+        const transcript = event.results[0][0].transcript;
+
+        // Update word with audio indicator
+        const updates = {
+          nativeWord: {
+            ...nativeWord,
+            audioRecorded: true,
+            audioTranscript: transcript
+          }
+        };
+
+        await updateWord(wordId, updates);
+        setRecordingNative(false);
+      };
+
+      recognition.onerror = (event) => {
+        console.error('Recording error:', event.error);
+        setRecordingError('Failed to record audio');
+        setRecordingNative(false);
+      };
+
+      recognition.onend = () => {
+        setRecordingNative(false);
+      };
+
+      recognition.start();
+
+      setTimeout(() => {
+        if (recognition) {
+          recognition.stop();
+        }
+      }, 5000);
+
+    } catch (err) {
+      console.error('Error starting recording:', err);
+      setRecordingError('Failed to start recording');
+      setRecordingNative(false);
+    }
+  };
+
   return (
     <div className="card hover:shadow-lg transition-shadow duration-200">
       <div className="flex items-start justify-between gap-3">
@@ -186,15 +299,45 @@ const WordCard = ({ word, language, context, timestamp, onDelete, wordId, foreig
                       >
                         <Volume2 size={18} />
                       </button>
+                      {!foreignWord.audioRecorded && (
+                        <button
+                          onClick={handleRecordForeignAudio}
+                          disabled={recordingForeign}
+                          className={`p-1 rounded-full transition-colors ${
+                            recordingForeign
+                              ? 'text-red-600 bg-red-50 animate-pulse'
+                              : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                          }`}
+                          title="Record audio for this word"
+                        >
+                          <Mic size={16} />
+                        </button>
+                      )}
                     </div>
                     <ArrowRight size={16} className="text-gray-400" />
-                    <h3
-                      className="text-xl font-semibold text-green-700 cursor-pointer hover:text-green-800 transition-colors"
-                      onClick={handleStartEdit}
-                      title="Click to edit"
-                    >
-                      {displayTranslation}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3
+                        className="text-xl font-semibold text-green-700 cursor-pointer hover:text-green-800 transition-colors"
+                        onClick={handleStartEdit}
+                        title="Click to edit"
+                      >
+                        {displayTranslation}
+                      </h3>
+                      {!nativeWord.audioRecorded && (
+                        <button
+                          onClick={handleRecordNativeAudio}
+                          disabled={recordingNative}
+                          className={`p-1 rounded-full transition-colors ${
+                            recordingNative
+                              ? 'text-red-600 bg-red-50 animate-pulse'
+                              : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                          }`}
+                          title="Record audio for this word"
+                        >
+                          <Mic size={16} />
+                        </button>
+                      )}
+                    </div>
                     <button
                       onClick={handleStartEdit}
                       className="p-1 text-gray-400 hover:text-primary-600 hover:bg-primary-50 rounded-full transition-colors"
@@ -205,7 +348,7 @@ const WordCard = ({ word, language, context, timestamp, onDelete, wordId, foreig
                   </div>
 
                   {/* Language */}
-                  <div className="flex items-center gap-2 mb-2">
+                  <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <Globe size={14} className="text-gray-500" />
                     <span className="text-sm font-medium text-gray-600">
                       {displayLanguage} → English
@@ -215,7 +358,38 @@ const WordCard = ({ word, language, context, timestamp, onDelete, wordId, foreig
                         {nativeWord.inputMode === 'text' ? 'Typed' : 'Recorded'}
                       </span>
                     )}
+                    {foreignWord.audioRecorded && (
+                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full flex items-center gap-1">
+                        <Mic size={10} />
+                        Foreign Audio
+                      </span>
+                    )}
+                    {nativeWord.audioRecorded && (
+                      <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full flex items-center gap-1">
+                        <Mic size={10} />
+                        Native Audio
+                      </span>
+                    )}
                   </div>
+
+                  {/* Recording Status */}
+                  {(recordingForeign || recordingNative || recordingError) && (
+                    <div className="mt-2">
+                      {recordingForeign && (
+                        <p className="text-xs text-red-600 animate-pulse">
+                          Recording foreign word audio...
+                        </p>
+                      )}
+                      {recordingNative && (
+                        <p className="text-xs text-red-600 animate-pulse">
+                          Recording native word audio...
+                        </p>
+                      )}
+                      {recordingError && (
+                        <p className="text-xs text-red-600">{recordingError}</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
