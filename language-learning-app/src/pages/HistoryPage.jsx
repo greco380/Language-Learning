@@ -1,13 +1,22 @@
 import React, { useState } from 'react';
-import { Search, Filter, Download, AlertCircle } from 'lucide-react';
+import { Search, Filter, Download, AlertCircle, Plus, X } from 'lucide-react';
 import WordCard from '../components/WordCard';
 import { useAppContext } from '../context/AppContext';
+import speechService from '../services/speechService';
 
 const HistoryPage = () => {
-  const { words, deleteWord, exportData } = useAppContext();
+  const { words, deleteWord, exportData, addWord } = useAppContext();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLanguage, setFilterLanguage] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
+
+  // Manual entry form state
+  const [showManualEntry, setShowManualEntry] = useState(false);
+  const [manualForeignWord, setManualForeignWord] = useState('');
+  const [manualNativeWord, setManualNativeWord] = useState('');
+  const [manualLanguage, setManualLanguage] = useState('Spanish');
+  const [manualError, setManualError] = useState(null);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
 
   // Get unique languages from words (handle both old and new format)
   const languages = [
@@ -59,6 +68,46 @@ const HistoryPage = () => {
     exportData();
   };
 
+  const handleManualSubmit = async () => {
+    if (!manualForeignWord.trim() || !manualNativeWord.trim()) {
+      setManualError('Both words are required');
+      return;
+    }
+
+    setManualSubmitting(true);
+    setManualError(null);
+
+    try {
+      const wordData = {
+        foreignWord: {
+          text: manualForeignWord.trim(),
+          language: manualLanguage,
+          audio: null
+        },
+        nativeWord: {
+          text: manualNativeWord.trim(),
+          language: 'English',
+          audio: null,
+          inputMode: 'text'
+        }
+      };
+
+      await addWord(wordData);
+
+      // Clear form
+      setManualForeignWord('');
+      setManualNativeWord('');
+      setShowManualEntry(false);
+    } catch (err) {
+      console.error('Error saving word:', err);
+      setManualError('Failed to save word');
+    } finally {
+      setManualSubmitting(false);
+    }
+  };
+
+  const availableLanguages = speechService.getAvailableLanguages();
+
   return (
     <div className="min-h-screen pb-20 pt-6 px-4 bg-gray-50">
       <div className="max-w-4xl mx-auto">
@@ -70,6 +119,121 @@ const HistoryPage = () => {
           <p className="text-gray-600">
             View and manage all your recorded words
           </p>
+        </div>
+
+        {/* Manual Entry Form */}
+        <div className="bg-white rounded-xl shadow-md mb-6 overflow-hidden">
+          {!showManualEntry ? (
+            <button
+              onClick={() => setShowManualEntry(true)}
+              className="w-full p-4 flex items-center justify-center gap-2 text-primary-600 hover:bg-primary-50 transition-colors"
+            >
+              <Plus size={20} />
+              <span className="font-semibold">Add Word Manually</span>
+            </button>
+          ) : (
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold text-gray-900">Add New Word</h3>
+                <button
+                  onClick={() => {
+                    setShowManualEntry(false);
+                    setManualForeignWord('');
+                    setManualNativeWord('');
+                    setManualError(null);
+                  }}
+                  className="p-1 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-100"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                {/* Language Selection */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Language
+                  </label>
+                  <select
+                    value={manualLanguage}
+                    onChange={(e) => setManualLanguage(e.target.value)}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  >
+                    {availableLanguages.map((lang) => (
+                      <option key={lang.code} value={lang.name}>
+                        {lang.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Foreign Word Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Foreign Word ({manualLanguage})
+                  </label>
+                  <input
+                    type="text"
+                    value={manualForeignWord}
+                    onChange={(e) => {
+                      setManualForeignWord(e.target.value);
+                      setManualError(null);
+                    }}
+                    placeholder={`Enter word in ${manualLanguage}`}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Native Word Input */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    English Translation
+                  </label>
+                  <input
+                    type="text"
+                    value={manualNativeWord}
+                    onChange={(e) => {
+                      setManualNativeWord(e.target.value);
+                      setManualError(null);
+                    }}
+                    placeholder="Enter English translation"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-transparent"
+                  />
+                </div>
+
+                {/* Error Message */}
+                {manualError && (
+                  <p className="text-sm text-red-600">{manualError}</p>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-3">
+                  <button
+                    onClick={handleManualSubmit}
+                    disabled={manualSubmitting}
+                    className="flex-1 btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {manualSubmitting ? 'Saving...' : 'Save Word'}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setShowManualEntry(false);
+                      setManualForeignWord('');
+                      setManualNativeWord('');
+                      setManualError(null);
+                    }}
+                    className="px-4 btn-secondary"
+                  >
+                    Cancel
+                  </button>
+                </div>
+
+                <p className="text-xs text-gray-500 italic">
+                  Note: You can record audio for this word later by clicking the microphone icon on the word card.
+                </p>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Stats */}
