@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Sparkles, TrendingUp } from 'lucide-react';
-import RecordButton from '../components/RecordButton';
+import DualRecordingInterface from '../components/DualRecordingInterface';
 import LanguageToggle from '../components/LanguageToggle';
 import WordCard from '../components/WordCard';
 import { useAppContext } from '../context/AppContext';
@@ -33,35 +33,30 @@ const HomePage = () => {
         </div>
 
         {/* Main Recording Section */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 mb-8">
+        <div className="bg-gradient-to-br from-primary-50 to-white rounded-2xl shadow-xl p-8 mb-8">
           <div className="text-center mb-8">
             <div className="flex items-center justify-center gap-2 mb-3">
               <Sparkles className="text-primary-600" size={24} />
               <h2 className="text-2xl font-bold text-gray-900">
-                Start Recording
+                Record New Word
               </h2>
             </div>
             <p className="text-gray-600 max-w-md mx-auto">
-              Click the microphone and say:
-              <br />
-              <span className="font-medium text-primary-600">
-                "Please say [word] in {selectedLanguage}"
-              </span>
+              Record or type a word in a foreign language and its English translation
             </p>
           </div>
 
-          {/* Record Button */}
-          <div className="flex justify-center">
-            <RecordButton onRecordComplete={handleRecordComplete} />
-          </div>
+          {/* Dual Recording Interface */}
+          <DualRecordingInterface onRecordComplete={handleRecordComplete} />
 
           {/* Instructions */}
           <div className="mt-8 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <h3 className="font-semibold text-blue-900 mb-2">How it works:</h3>
             <ol className="text-sm text-blue-800 space-y-1 list-decimal list-inside">
-              <li>Click the microphone button</li>
-              <li>Say what word you want to learn (e.g., "Please say hello in Spanish")</li>
-              <li>The word will be saved to your vocabulary</li>
+              <li>Select the foreign language and record the word</li>
+              <li>Choose Audio or Text mode for the English translation</li>
+              <li>Record or type the English translation</li>
+              <li>Click "Save Word Pair" to add to your vocabulary</li>
               <li>Practice your words in the Practice section</li>
             </ol>
           </div>
@@ -110,14 +105,16 @@ const HomePage = () => {
             </div>
 
             <div className="space-y-3">
-              {recentWords.map((word) => (
+              {recentWords.map((wordData) => (
                 <WordCard
-                  key={word.id}
-                  wordId={word.id}
-                  word={word.word}
-                  language={word.language}
-                  context={word.context}
-                  timestamp={word.timestamp}
+                  key={wordData.id}
+                  wordId={wordData.id}
+                  word={wordData.word}
+                  language={wordData.language}
+                  context={wordData.context}
+                  timestamp={wordData.timestamp}
+                  foreignWord={wordData.foreignWord}
+                  nativeWord={wordData.nativeWord}
                 />
               ))}
             </div>

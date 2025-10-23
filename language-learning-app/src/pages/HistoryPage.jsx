@@ -9,17 +9,31 @@ const HistoryPage = () => {
   const [filterLanguage, setFilterLanguage] = useState('all');
   const [sortBy, setSortBy] = useState('newest');
 
-  // Get unique languages from words
-  const languages = ['all', ...new Set(words.map((w) => w.language))];
+  // Get unique languages from words (handle both old and new format)
+  const languages = [
+    'all',
+    ...new Set(
+      words.map((w) => (w.foreignWord ? w.foreignWord.language : w.language))
+    ),
+  ];
 
   // Filter and sort words
   const filteredWords = words
-    .filter((word) => {
-      const matchesSearch = word.word
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
+    .filter((wordData) => {
+      // Handle both old and new format
+      const wordText = wordData.foreignWord
+        ? wordData.foreignWord.text
+        : wordData.word;
+      const wordLang = wordData.foreignWord
+        ? wordData.foreignWord.language
+        : wordData.language;
+      const nativeText = wordData.nativeWord ? wordData.nativeWord.text : '';
+
+      const matchesSearch =
+        wordText.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        nativeText.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesLanguage =
-        filterLanguage === 'all' || word.language === filterLanguage;
+        filterLanguage === 'all' || wordLang === filterLanguage;
       return matchesSearch && matchesLanguage;
     })
     .sort((a, b) => {
@@ -28,7 +42,9 @@ const HistoryPage = () => {
       } else if (sortBy === 'oldest') {
         return new Date(a.timestamp) - new Date(b.timestamp);
       } else if (sortBy === 'alphabetical') {
-        return a.word.localeCompare(b.word);
+        const aWord = a.foreignWord ? a.foreignWord.text : a.word;
+        const bWord = b.foreignWord ? b.foreignWord.text : b.word;
+        return aWord.localeCompare(bWord);
       }
       return 0;
     });
@@ -152,14 +168,16 @@ const HistoryPage = () => {
         {/* Word List */}
         {filteredWords.length > 0 ? (
           <div className="space-y-3">
-            {filteredWords.map((word) => (
+            {filteredWords.map((wordData) => (
               <WordCard
-                key={word.id}
-                wordId={word.id}
-                word={word.word}
-                language={word.language}
-                context={word.context}
-                timestamp={word.timestamp}
+                key={wordData.id}
+                wordId={wordData.id}
+                word={wordData.word}
+                language={wordData.language}
+                context={wordData.context}
+                timestamp={wordData.timestamp}
+                foreignWord={wordData.foreignWord}
+                nativeWord={wordData.nativeWord}
                 onDelete={handleDeleteWord}
               />
             ))}
