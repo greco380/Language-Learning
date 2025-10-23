@@ -58,16 +58,38 @@ export const AppProvider = ({ children }) => {
 
   /**
    * Add a new word to the collection
+   * Supports both old format (single word) and new format (foreign + native pair)
    */
   const addWord = async (wordData) => {
     try {
-      const wordObj = {
-        word: wordData.word,
-        language: wordData.language || selectedLanguage,
-        context: wordData.context || '',
-        timestamp: new Date().toISOString(),
-        audioUrl: wordData.audioUrl || null,
-      };
+      let wordObj;
+
+      // Check if this is the new dual recording format
+      if (wordData.foreignWord && wordData.nativeWord) {
+        wordObj = {
+          foreignWord: {
+            text: wordData.foreignWord.text,
+            language: wordData.foreignWord.language,
+            audio: wordData.foreignWord.audio || null,
+          },
+          nativeWord: {
+            text: wordData.nativeWord.text,
+            language: wordData.nativeWord.language || 'English',
+            audio: wordData.nativeWord.audio || null,
+            inputMode: wordData.nativeWord.inputMode || 'audio',
+          },
+          timestamp: new Date().toISOString(),
+        };
+      } else {
+        // Old format for backward compatibility
+        wordObj = {
+          word: wordData.word,
+          language: wordData.language || selectedLanguage,
+          context: wordData.context || '',
+          timestamp: new Date().toISOString(),
+          audioUrl: wordData.audioUrl || null,
+        };
+      }
 
       const savedWord = storageService.saveWord(wordObj);
       setWords(prev => [savedWord, ...prev]);
